@@ -1,0 +1,280 @@
+import tkinter as tk
+from tkinter import messagebox
+import json
+import os
+
+
+
+
+class Storage:
+    FILE_NAME = "tasks.json"
+
+    @staticmethod
+    def load():
+        if os.path.exists(Storage.FILE_NAME):
+            try:
+                with open(Storage.FILE_NAME, "r", encoding="utf-8") as file:
+                    return json.load(file)
+            except (json.JSONDecodeError, OSError):
+                return []
+        return []
+
+    @staticmethod
+    def save(tasks):
+        with open(Storage.FILE_NAME, "w", encoding="utf-8") as file:
+            json.dump(tasks, file, ensure_ascii=False, indent=4)
+
+
+
+
+class AppLabel(tk.Label):
+    def __init__(self, parent, text, **kwargs):
+        super().__init__(
+            parent,
+            text=text,
+            font=("Arial", 12),
+            bg="#222831",
+            fg="white",
+            **kwargs
+        )
+
+
+class AppButton(tk.Button):
+    def __init__(self, parent, text, command, **kwargs):
+        super().__init__(
+            parent,
+            text=text,
+            command=command,
+            font=("Arial", 10, "bold"),
+            bg="#0077b6",
+            fg="white",
+            activebackground="#023e8a",
+            activeforeground="white",
+            relief="flat",
+            cursor="hand2",
+            padx=10,
+            pady=5,
+            **kwargs
+        )
+
+
+class AppListbox(tk.Listbox):
+    def __init__(self, parent, **kwargs):
+        super().__init__(
+            parent,
+            font=("Arial", 12),
+            bg="#393e46",
+            fg="white",
+            selectbackground="#0077b6",
+            selectforeground="white",
+            borderwidth=0,
+            highlightthickness=0,
+            **kwargs
+        )
+
+
+
+class TaskManager:
+
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Task Manager")
+        self.root.geometry("550x500")
+        self.root.configure(bg="#222831")
+        self.root.resizable(False, False)
+
+        self.tasks = Storage.load()
+
+        self.create_interface()
+        self.show_tasks()
+
+    # CREATE INTERFACE
+
+    def create_interface(self):
+        title = AppLabel(
+            self.root,
+            "TASK MANAGER",
+            font=("Arial", 24, "bold"),
+            fg="#00adb5"
+        )
+        title.pack(pady=20)
+
+        AppLabel(
+            self.root,
+            "Введите новую задачу:"
+        ).pack(pady=5)
+
+        self.task_entry = tk.Entry(
+            self.root,
+            font=("Arial", 13),
+            width=35,
+            bg="#eeeeee",
+            fg="#222831"
+        )
+        self.task_entry.pack(pady=10)
+
+        self.task_entry.bind(
+            "<Return>",
+            lambda event: self.add_task()
+        )
+
+        AppButton(
+            self.root,
+            "Добавить задачу",
+            self.add_task
+        ).pack(pady=5)
+
+        AppLabel(
+            self.root,
+            "Список задач:"
+        ).pack(pady=10)
+
+        self.task_list = AppListbox(
+            self.root,
+            width=50,
+            height=12
+        )
+        self.task_list.pack(pady=5)
+
+        buttons_frame = tk.Frame(
+            self.root,
+            bg="#222831"
+        )
+        buttons_frame.pack(pady=15)
+
+        AppButton(
+            buttons_frame,
+            "Выполнено",
+            self.complete_task
+        ).grid(row=0, column=0, padx=5)
+
+        AppButton(
+            buttons_frame,
+            "Удалить",
+            self.delete_task
+        ).grid(row=0, column=1, padx=5)
+
+        AppButton(
+            buttons_frame,
+            "Обновить",
+            self.show_tasks
+        ).grid(row=0, column=2, padx=5)
+
+        AppButton(
+            self.root,
+            "Очистить все задачи",
+            self.clear_tasks,
+            bg="#d62828"
+        ).pack(pady=5)
+
+        self.status_label = AppLabel(
+            self.root,
+            "Добро пожаловать!"
+        )
+        self.status_label.pack(pady=10)
+
+    # SHOW TASKS
+
+    def show_tasks(self):
+        self.task_list.delete(0, tk.END)
+
+        for index, task in enumerate(self.tasks, start=1):
+            status = "✔" if task["completed"] else "○"
+
+            self.task_list.insert(
+                tk.END,
+                f"{index}. {status} {task['title']}"
+            )
+
+        self.status_label.config(
+            text=f"Всего задач: {len(self.tasks)}"
+        )
+
+    # ADD TASK
+
+    def add_task(self):
+        title = self.task_entry.get().strip()
+
+        if not title:
+            messagebox.showwarning(
+                "Ошибка",
+                "Введите название задачи!"
+            )
+            return
+
+        self.tasks.append({
+            "title": title,
+            "completed": False
+        })
+
+        self.task_entry.delete(0, tk.END)
+
+        self.save_tasks()
+        self.show_tasks()
+
+    # COMPLETE TASK
+
+    def complete_task(self):
+        selection = self.task_list.curselection()
+
+        if not selection:
+            messagebox.showwarning(
+                "Ошибка",
+                "Выберите задачу!"
+            )
+            return
+
+        index = selection[0]
+
+        self.tasks[index]["completed"] = not self.tasks[index]["completed"]
+
+        self.save_tasks()
+        self.show_tasks()
+
+    # DELETE TASK
+
+    def delete_task(self):
+        selection = self.task_list.curselection()
+
+        if not selection:
+            messagebox.showwarning(
+                "Ошибка",
+                "Выберите задачу для удаления!"
+            )
+            return
+
+        index = selection[0]
+
+        del self.tasks[index]
+
+        self.save_tasks()
+        self.show_tasks()
+
+    # CLEAR ALL TASKS
+
+    def clear_tasks(self):
+        if not self.tasks:
+            return
+
+        answer = messagebox.askyesno(
+            "Подтверждение",
+            "Вы действительно хотите удалить все задачи?"
+        )
+
+        if answer:
+            self.tasks.clear()
+            self.save_tasks()
+            self.show_tasks()
+
+    # SAVE TASKS
+
+    def save_tasks(self):
+        Storage.save(self.tasks)
+
+
+
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = TaskManager(root)
+    root.mainloop()
